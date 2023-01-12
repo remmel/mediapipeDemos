@@ -27,7 +27,10 @@ nose_idx = points_idx.index(4)
 # frame_height, frame_width, channels = (480, 640, 3)
 # focal_length = 525
 
-dir = "/home/remmel/workspace/dataset/vv/kinects/mediapipe/k2-move/left/"
+# f = "/media/remmel/DATASSDEXT/photogrammetry/dataset/2022-06-29_kinect/k2-landscape-horizontal/original/000022_rgb-mirror.jpg"
+# f = "/media/remmel/DATASSDEXT/photogrammetry/dataset/vv/kinects/mediapipe/k2-move/left/image.jpg"
+# f = "/media/remmel/PHOTOGRA/dataset/2021-12-08_kinectv2x2/seated/k21-180.jpg"
+f = "/media/remmel/DATASSDEXT/photogrammetry/dataset/vv/kinects/mediapipe/py-k2-mediapipeface/0266_rgb-mirror.jpg"
 frame_height, frame_width, channels = (1080, 1920, 3)
 focal_length = 1081
 
@@ -52,13 +55,14 @@ def main():
     )
 
     with mp_face_mesh.FaceMesh(
+        refine_landmarks=True,
         static_image_mode=True,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
     ) as face_mesh:
 
         # for idx, (frame, frame_rgb) in enumerate(source):
-        frame = cv2.imread(dir + "image.jpg")
+        frame = cv2.imread(f)
         results = face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         multi_face_landmarks = results.multi_face_landmarks
 
@@ -69,6 +73,8 @@ def main():
             )
             # print(landmarks.shape)
             landmarks = landmarks.T
+
+            landmarks = landmarks[:, :468]
 
             metric_landmarks, pose_transform_mat = get_metric_landmarks(
                 landmarks.copy(), pcf
@@ -87,7 +93,7 @@ def main():
                 flags=cv2.cv2.SOLVEPNP_ITERATIVE,
             )
 
-            exportToJson(face_landmarks, model_points, points_idx, rotation_vector, translation_vector, dir)
+            exportToJson(face_landmarks, model_points, points_idx, rotation_vector, translation_vector, f)
 
             (nose_end_point2D, jacobian) = cv2.projectPoints(
                 np.array([(0.0, 0.0, 25.0)]),
@@ -110,10 +116,13 @@ def main():
             p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
 
             frame = cv2.line(frame, p1, p2, (255, 0, 0), 2)
+            cv2.imwrite(f + ".drawlandmarks.jpg", frame)
 
             # source.show(frame)
             cv2.imshow("rgb", frame)
             cv2.waitKey()
+        else:
+            print("No face detected")
 
 def exportToJson(face_landmarks, model_points, points_idx, rotation_vector, translation_vector, dir):
     export = dict()
@@ -129,10 +138,16 @@ def exportToJson(face_landmarks, model_points, points_idx, rotation_vector, tran
             'idx': idx
         })
     export["rotation"] = rotation_vector.T.tolist()[0]
+    rotation_mat, _ = cv2.Rodrigues(rotation_vector)
+    export["rotation"] = rotation_mat.flatten().tolist()
+
     translation_vector_m = translation_vector / 100
     export["translation"] = translation_vector_m.T.tolist()[0]
 
-    with open(dir + 'facemesh.json', 'w') as outfile:
+
+    cv2.Rodrigues(translation_vector_m)
+
+    with open(dir + '.facemesh.json', 'w') as outfile:
         json.dump(export, outfile, indent=4)
 
 if __name__ == "__main__":
